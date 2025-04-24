@@ -1,0 +1,50 @@
+name: ADF CI Pipeline
+
+on:
+  push:
+    branches:
+      - main  # Or the source development branch you use
+
+permissions:
+  contents: write
+
+env:
+  DEV_SUBSCRIPTION_ID: "0d3ce63c-abaa-48ae-bbe1-f582cea576b9"
+  DEV_RESOURCE_GROUP: "mayurr-rg"
+  DEV_ADF_NAME: "dev-adf-pactiv"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18.x
+
+      - name: Install ADF Utilities
+        run: npm install
+        working-directory: ./build
+
+      - name: Validate ADF Configuration
+        run: npm run build validate ./ /subscriptions/${{ env.DEV_SUBSCRIPTION_ID }}/resourceGroups/${{ env.DEV_RESOURCE_GROUP }}/providers/Microsoft.DataFactory/factories/${{ env.DEV_ADF_NAME }}
+        working-directory: ./build
+
+      - name: Export ARM Templates
+        run: npm run build export ./ /subscriptions/${{ env.DEV_SUBSCRIPTION_ID }}/resourceGroups/${{ env.DEV_RESOURCE_GROUP }}/providers/Microsoft.DataFactory/factories/${{ env.DEV_ADF_NAME }} ExportedArmTemplate
+        working-directory: ./build
+
+      - name: Push to adf_publish branch
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git fetch
+          git checkout -B adf_publish
+          mkdir -p ADFTemplates
+          cp -r ./build/ExportedArmTemplate/* ADFTemplates/
+          git add ADFTemplates
+          git commit -m "CI: Export and publish ADF ARM templates"
+          git push origin adf_publish --force
